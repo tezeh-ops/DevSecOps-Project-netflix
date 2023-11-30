@@ -1,7 +1,8 @@
+
 pipeline{
     agent any
     tools{
-        jdk 'jdk17'
+        jdk 'jdk17'                //define the tool we want to use in thei pipeline here
         nodejs 'node16'
     }
     environment {
@@ -15,10 +16,10 @@ pipeline{
         }
         stage('Checkout from Git'){
             steps{
-                git branch: 'main', url: 'https://github.com/Aj7Ay/Netflix-clone.git'
+                git branch: 'main', url: 'https://github.com/tezeh-ops/DevSecOps-Project-netflix.git'
             }
         }
-        stage("Sonarqube Analysis "){
+        stage("Sonarqube Analysis "){                       // runnin sonarqube analysis on the code using the < sonar-scanner > tool which we have configured
             steps{
                 withSonarQubeEnv('sonar-server') {
                     sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Netflix \
@@ -26,19 +27,19 @@ pipeline{
                 }
             }
         }
-        stage("quality gate"){
+        stage("quality gate"){           // ruunig quality gate to check the the pre-define caterials are being made before it can proceed to the next step
            steps {
                 script {
                     waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
                 }
             } 
         }
-        stage('Install Dependencies') {
+        stage('Install Dependencies') {    // installing dependencies 
             steps {
                 sh "npm install"
             }
         }
-        stage('OWASP FS SCAN') {
+        stage('OWASP FS SCAN') {  // Owasp is a plugin that we check all the Dependencies that we have install to make sure the are sure to use in our project
             steps {
                 dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
                 dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
@@ -46,31 +47,36 @@ pipeline{
         }
         stage('TRIVY FS SCAN') {
             steps {
-                sh "trivy fs . > trivyfs.txt"
+                sh "trivy fs . > trivyfs.txt"   // scannin all the file inour ROOT directory and sending the result in a file call < trivyfs.txt > 
             }
         }
-        stage("Docker Build & Push"){
+        stage("Docker Build & Push"){         // build and pushing our docker image 
             steps{
                 script{
                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){   
-                       sh "docker build --build-arg TMDB_V3_API_KEY=<yourtmdbapikey> -t netflix ."
-                       sh "docker tag netflix nasi101/netflix:latest "
-                       sh "docker push nasi101/netflix:latest "
+                       sh "docker build --build-arg TMDB_V3_API_KEY=f376cefb8b901d044b4c8fa722b60cff -t netflix ."
+                       sh "docker tag netflix tezeh/netflix:latest "
+                       sh "docker push tezeh/netflix:latest "
                     }
                 }
             }
         }
         stage("TRIVY"){
             steps{
-                sh "trivy image nasi101/netflix:latest > trivyimage.txt" 
+                sh "trivy image tezeh/netflix:latest > trivyimage.txt" //  scanning our image and sending the result to the < trivyimage.txt> 
             }
         }
+
+ //Comment the two stages below  because we are deploy in into K8s not docker and we are also using Argocd  to deploy it        
+        /*
         stage('Deploy to container'){
             steps{
-                sh 'docker run -d -p 8081:80 nasi101/netflix:latest'
+                sh 'docker run -d  -p 8081:80 tezeh/netflix:latest'
             }
         }
-        stage('Deploy to kubernets'){
+        */
+        /*
+         stage('Deploy to kubernets'){
             steps{
                 script{
                     dir('Kubernetes') {
@@ -83,7 +89,12 @@ pipeline{
             }
         }
 
+    
     }
+   */
+
+ // Comment ends here  
+  
     post {
      always {
         emailext attachLog: true,
@@ -91,8 +102,9 @@ pipeline{
             body: "Project: ${env.JOB_NAME}<br/>" +
                 "Build Number: ${env.BUILD_NUMBER}<br/>" +
                 "URL: ${env.BUILD_URL}<br/>",
-            to: 'iambatmanthegoat@gmail.com',                                #change mail here
-            attachmentsPattern: 'trivyfs.txt,trivyimage.txt'
+            to: 'samuelmunoh@gmail.com',                            // make sure to put yur email here         
+            attachmentsPattern: 'trivyfs.txt,trivyimage.txt'   // sending the file containing our image scanresult and the file will all the Root files scann result to our Email. 
         }
     }
 }
+
